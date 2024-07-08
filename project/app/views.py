@@ -6,6 +6,10 @@ from django.contrib.auth.hashers import make_password, check_password
 from .models import User
 import re
 import logging
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.http import JsonResponse
+import time
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -99,3 +103,43 @@ def reset_password(request):
     except Exception as e:
         logger.error(f"Error during password reset: {e}")
         return error_response(str(e), 'SERVER_ERROR', status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+def run_pipeline(request):
+    if request.method == 'POST':
+        algorithm = request.POST.get('algorithm')
+        
+        # 保存上传的文件
+        uploaded_files = {
+            'caseSample': [],
+            'controlSample': [],
+            'proteinSequence': [],
+        }
+
+        for file_type in uploaded_files.keys():
+            if f'{file_type}_default' in request.POST:
+                uploaded_files[file_type].append(request.POST[f'{file_type}_default'])
+            else:
+                files = request.FILES.getlist(file_type)
+                for f in files:
+                    file_name = default_storage.save(f.name, ContentFile(f.read()))
+                    uploaded_files[file_type].append(file_name)
+        
+        # 返回接受成功的消息
+        result = {
+            'status': 'success',
+            'algorithm': algorithm,
+            'files': uploaded_files,
+        }
+        return Response(result, status=status.HTTP_200_OK)
+
+    return Response({'error': 'Invalid request'}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def pipeline_result(request):
+    # 模拟处理时间
+    time.sleep(10)  # 例如：10秒
+
+    # 假设处理后的文件路径
+    processed_file_path = default_storage.url('processed_file.txt')
+    return Response({'file': processed_file_path}, status=status.HTTP_200_OK)
