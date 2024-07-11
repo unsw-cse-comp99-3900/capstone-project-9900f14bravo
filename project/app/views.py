@@ -1,12 +1,20 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import make_password, check_password
-from .models import User
+from django.conf import settings
+from .models import User, UploadedFile
+from .forms import UploadFilesForm
 import re
 import logging
-
+import os
+from rest_framework.decorators import permission_classes
+from rest_framework.permissions import AllowAny
+from .algorithms.PIWAS import run_piwas
+from .algorithms.PIE import run_pie
 # 设置日志
 logger = logging.getLogger(__name__)
 
@@ -16,7 +24,28 @@ password_pattern = re.compile(r'^(?=.*[A-Z])(?=.*[a-z])(?=.*[\W_]).{8,}$')
 def error_response(message, code, status_code):
     return Response({'error': {'message': message, 'code': code}}, status=status_code)
 
+
+def save_uploaded_file(file, file_type, user):
+    try:
+        upload_dir = os.path.join(settings.MEDIA_ROOT, file_type)
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, file.name)
+        logger.info(f"Saving file to {file_path}")
+        
+        with open(file_path, 'wb+') as destination:
+            for chunk in file.chunks():
+                destination.write(chunk)
+        
+        # Save file information in the database
+        UploadedFile.objects.create(user=user, file=file_path, file_type=file_type)
+        logger.info(f"File {file.name} saved successfully.")
+        return file_path
+    except Exception as e:
+        logger.error(f"Error saving file {file.name}: {e}")
+        raise
+
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def register(request):
     username = request.data.get('username')
     password = request.data.get('password')
@@ -46,6 +75,7 @@ def register(request):
         return error_response(str(e), 'SERVER_ERROR', status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def login(request):
     username = request.data.get('username')
     password = request.data.get('password')
@@ -56,7 +86,14 @@ def login(request):
     try:
         user = User.objects.get(username=username)
         if check_password(password, user.password):
-            return Response({'auth': True, 'message': 'Login successful'}, status=status.HTTP_200_OK)
+            # 用户验证成功，生成Token
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'auth': True,
+                'message': 'Login successful'
+            }, status=status.HTTP_200_OK)
         else:
             return error_response('Incorrect password.', 'INVALID_PASSWORD', status.HTTP_401_UNAUTHORIZED)
     except User.DoesNotExist:
@@ -66,6 +103,7 @@ def login(request):
         return error_response(f'Server error: {str(e)}', 'SERVER_ERROR', status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def reset_password(request):
     username = request.data.get('username')
     question_id = request.data.get('question_id')
@@ -99,3 +137,176 @@ def reset_password(request):
     except Exception as e:
         logger.error(f"Error during password reset: {e}")
         return error_response(str(e), 'SERVER_ERROR', status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+def upload_case_files(request):
+    logger.info("Received upload request for case files")
+    user = request.user
+    case_files = request.FILES.getlist('case_files')
+    logger.info(f"Received case files: {case_files}")
+
+    if not case_files:
+        return Response({'error': {'case_files': 'No case files were submitted.'}}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        file_paths = []
+        for file in case_files:
+            logger.info(f"Saving case file: {file.name}")
+            file_path = save_uploaded_file(file, 'case', user)
+            file_paths.append(file_path)
+        return Response({'message': 'Case files uploaded successfully!', 'file_paths': file_paths}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        logger.error(f"Error during case file upload: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+def upload_control_files(request):
+    logger.info("Received upload request for control files")
+    user = request.user
+    control_files = request.FILES.getlist('control_files')
+    logger.info(f"Received control files: {control_files}")
+
+    if not control_files:
+        return Response({'error': {'control_files': 'No control files were submitted.'}}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        file_paths = []
+        for file in control_files:
+            logger.info(f"Saving control file: {file.name}")
+            file_path = save_uploaded_file(file, 'control', user)
+            file_paths.append(file_path)
+        return Response({'message': 'Control files uploaded successfully!', 'file_paths': file_paths}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        logger.error(f"Error during control file upload: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+def upload_protein_file(request):
+    logger.info("Received upload request for protein file")
+    user = request.user
+    protein_file = request.FILES.get('protein_file')
+    logger.info(f"Received protein file: {protein_file}")
+
+    if not protein_file:
+        return Response({'error': {'protein_file': 'No protein file was submitted.'}}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        logger.info(f"Saving protein file: {protein_file.name}")
+        file_path = save_uploaded_file(protein_file, 'protein', user)
+        return Response({'message': 'Protein file uploaded successfully!', 'file_path': file_path}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        logger.error(f"Error during protein file upload: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+def upload_piwas_results(request):
+    logger.info("Received upload request for PIWAS result files")
+    user = request.user
+    piwas_result_files = request.FILES.getlist('piwas_result_files')
+    logger.info(f"Received PIWAS result files: {piwas_result_files}")
+
+    if not piwas_result_files:
+        return Response({'error': {'piwas_result_files': 'No PIWAS result files were submitted.'}}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        file_paths = []
+        for file in piwas_result_files:
+            logger.info(f"Saving PIWAS result file: {file.name}")
+            file_path = save_uploaded_file(file, 'uploaded-PIWAS-result', user)
+            file_paths.append(file_path)
+        return Response({'message': 'PIWAS result files uploaded successfully!', 'file_paths': file_paths}, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        logger.error(f"Error during PIWAS result file upload: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def run_piwas_algorithm(request):
+    try:
+        case_file_paths = request.data.get('case_file_paths')
+        control_file_paths = request.data.get('control_file_paths')
+        protein_file_path = request.data.get('protein_file_path')
+        user = request.user
+
+        if not case_file_paths or not control_file_paths or not protein_file_path:
+            return Response({'error': 'Required files are missing'}, status=status.HTTP_400_BAD_REQUEST)
+
+        result_dir = os.path.join(settings.MEDIA_ROOT, 'PIWAS-result')
+        os.makedirs(result_dir, exist_ok=True)
+
+        run_piwas(case_file_paths, control_file_paths, protein_file_path, result_dir)
+        result_file_paths = {
+            'piwas_case_result': os.path.join(result_dir, 'piwas_scores_case.csv'),
+            'piwas_control_result': os.path.join(result_dir, 'piwas_scores_control.csv')
+        }
+
+        return Response({'status': 'success', 'file_paths': result_file_paths}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error running PIWAS algorithm: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+def run_pie_algorithm(request):
+    try:
+        piwas_case_file_path = request.data.get('piwas_case_file_path')
+        piwas_control_file_path = request.data.get('piwas_control_file_path')
+        protein_file_path = request.data.get('protein_file_path')
+        user = request.user
+
+        if not piwas_case_file_path or not piwas_control_file_path or not protein_file_path:
+            return Response({'error': 'Required files are missing'}, status=status.HTTP_400_BAD_REQUEST)
+
+        result_dir = os.path.join(settings.MEDIA_ROOT, 'PIE-result')
+        os.makedirs(result_dir, exist_ok=True)
+
+        run_pie(piwas_case_file_path, piwas_control_file_path, protein_file_path, result_dir)
+        result_file_paths = {
+            'pie_5mer_result': os.path.join(result_dir, 'significant_regions_5mer.csv'),
+            'pie_6mer_result': os.path.join(result_dir, 'significant_regions_6mer.csv')
+        }
+
+        return Response({'status': 'success', 'file_paths': result_file_paths}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error running PIE algorithm: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['POST'])
+def run_piwas_pie_algorithm(request):
+    try:
+        case_file_paths = request.data.get('case_file_paths')
+        control_file_paths = request.data.get('control_file_paths')
+        protein_file_path = request.data.get('protein_file_path')
+        user = request.user
+
+        if not case_file_paths or not control_file_paths or not protein_file_path:
+            return Response({'error': 'Required files are missing'}, status=status.HTTP_400_BAD_REQUEST)
+
+        result_dir = os.path.join(settings.MEDIA_ROOT, 'PIWAS&PIE-result')
+        piwas_result_dir = os.path.join(result_dir, 'PIWAS-result')
+        pie_result_dir = os.path.join(result_dir, 'PIE-result')
+        os.makedirs(piwas_result_dir, exist_ok=True)
+        os.makedirs(pie_result_dir, exist_ok=True)
+
+        run_piwas(case_file_paths, control_file_paths, protein_file_path, piwas_result_dir)
+        run_pie(
+            case_file_path=os.path.join(piwas_result_dir, 'piwas_scores_case.csv'),
+            control_file_path=os.path.join(piwas_result_dir, 'piwas_scores_control.csv'),
+            protein_file_path=protein_file_path,
+            result_dir=pie_result_dir
+        )
+
+        result_file_paths = {
+            'piwas_case_result': os.path.join(piwas_result_dir, 'piwas_scores_case.csv'),
+            'piwas_control_result': os.path.join(piwas_result_dir, 'piwas_scores_control.csv'),
+            'pie_5mer_result': os.path.join(pie_result_dir, 'significant_regions_5mer.csv'),
+            'pie_6mer_result': os.path.join(pie_result_dir, 'significant_regions_6mer.csv')
+        }
+
+        return Response({'status': 'success', 'file_paths': result_file_paths}, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"Error running PIWAS+PIE algorithm: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

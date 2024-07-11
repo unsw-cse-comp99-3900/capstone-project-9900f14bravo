@@ -1,4 +1,4 @@
-// src/compoment/LoginForm.jsx
+// src/components/LoginForm.jsx
 
 import React, { useState } from "react";
 import NavBar from "./NavBar";
@@ -10,7 +10,7 @@ import { useAuth } from '../AuthContext';
 
 function LoginForm() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, logout } = useAuth(); // 获取 logout 方法
   const [formData, setFormData] = useState({ username: '', password: '' });
   const [errors, setErrors] = useState({ username: '', password: '', general: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -21,9 +21,12 @@ function LoginForm() {
   };
 
   const handleFieldErrors = (error) => {
+    console.log("Error received:", error); // 打印查看错误对象
     const newErrors = { username: '', password: '', general: '' };
-    if (error.response) {
+    
+    if (error.response && error.response.data && error.response.data.error) {
       const { message, code } = error.response.data.error;
+      
       if (code === 'USER_NOT_FOUND') {
         newErrors.username = message;
       } else if (code === 'INVALID_PASSWORD') {
@@ -32,6 +35,7 @@ function LoginForm() {
         newErrors.general = message;
       }
     } else {
+      // 如果响应结构不如预期，给出一个通用错误消息
       newErrors.general = 'Login failed due to server error.';
     }
     setErrors(newErrors);
@@ -40,10 +44,11 @@ function LoginForm() {
   const handleSubmit = (event) => {
     event.preventDefault();
     const { username, password } = formData;
-
-    // 清除所有错误提示
+  
+    // 清除错误状态
     setErrors({ username: '', password: '', general: '' });
-
+  
+    // 验证字段
     if (!username || !password) {
       const newErrors = {};
       if (!username) {
@@ -55,22 +60,43 @@ function LoginForm() {
       setErrors(newErrors);
       return;
     }
-
-    axios.post('http://localhost:8000/api/login/', { username, password })
+  
+    // 发送登录请求
+    axios.post('http://localhost:8000/api/login/', formData)
       .then((response) => {
-        if (response.data.auth) {
-          login(); // 更新身份验证状态
-          navigate('/pipeline'); // 登录成功后跳转
-        } else {
-          setErrors({ ...errors, general: response.data.error.message });
-        }
+        const { access, refresh } = response.data;
+        // 存储令牌
+        localStorage.setItem('accessToken', access);
+        localStorage.setItem('refreshToken', refresh);
+        // 使用登录方法传递访问令牌
+        login(access);
+        // 登录成功后跳转
+        navigate('/pipeline');
       })
       .catch((error) => {
-        handleFieldErrors(error);
+        // 处理错误响应
+        if (error.response) {
+          const errorData = error.response.data;
+          const newErrors = {};
+          if (errorData.username) {
+            newErrors.username = errorData.username;
+          }
+          if (errorData.password) {
+            newErrors.password = errorData.password;
+          }
+          if (errorData.detail) {
+            newErrors.general = errorData.detail;
+          }
+          setErrors(newErrors);
+        } else {
+          // 处理网络错误或其他错误
+          setErrors({ general: 'An unexpected error occurred. Please try again.' });
+        }
       });
   };
 
   const handlePasswordResetClick = () => {
+    logout(); // 确保在重置密码前清理状态
     navigate('/passwordreset');
   };
 
@@ -129,7 +155,7 @@ function LoginForm() {
                       onClick={() => setShowPassword(!showPassword)}
                       onMouseDown={(e) => e.preventDefault()}
                     >
-                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                      {showPassword ? <Visibility /> : <VisibilityOff />}
                     </IconButton>
                   </InputAdornment>
                 )
