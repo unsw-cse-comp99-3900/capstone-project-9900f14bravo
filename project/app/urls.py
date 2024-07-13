@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import register, login, reset_password,upload_case_files, upload_control_files, upload_protein_file,upload_piwas_results, run_piwas_algorithm, run_pie_algorithm, run_piwas_pie_algorithm
+from .views import register, login, reset_password,upload_case_files, upload_control_files, upload_protein_file,upload_piwas_results, run_piwas_algorithm, run_pie_algorithm, run_piwas_pie_algorithm, download_result_file
 urlpatterns = [
     path('register/', register, name='register'),
     path('login/', login, name='login'),
@@ -11,4 +11,5 @@ urlpatterns = [
     path('run-piwas-algorithm/', run_piwas_algorithm, name='run_piwas_algorithm'),
     path('run-pie-algorithm/', run_pie_algorithm, name='run_pie_algorithm'),
     path('run-piwas+pie-algorithm/', run_piwas_pie_algorithm, name='run_piwas_algorithm'),
+    path('download-result-file/', download_result_file, name='download_result_file'),
 ]
