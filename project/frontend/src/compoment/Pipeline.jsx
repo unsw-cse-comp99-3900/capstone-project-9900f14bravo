@@ -63,6 +63,25 @@ const Pipeline = () => {
     }
     setFiles({ ...files, [fileType]: [] });
   };
+   const downloadFile = async (filePath) => {
+    try {
+      const response = await axios.get('http://localhost:8000/api/download-result-file/', {
+        params: { file_path: filePath },
+        headers: { 'Authorization': `Bearer ${token}` },
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filePath.split('/').pop());
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      setErrorMessage('Error downloading file: ' + error.message);
+    }
+  };
 
   const handleRun = async () => {
     if (!algorithm) {
@@ -490,18 +509,25 @@ const Pipeline = () => {
           {running && <Typography>Running...</Typography>}
   
           {processedFile && (
-            <div>
-              <Typography>Process completed. Download the result below:</Typography>
-              <Button href={processedFile} download>
-                Download Processed File
-              </Button>
-              <Box sx={{ mt: 2 }}>
-                <Button variant="contained" color="primary" onClick={handleReset}>
-                  New Pipeline
-                </Button>
-              </Box>
-            </div>
-          )}
+      <div>
+        <Typography>Process completed. Download the result below:</Typography>
+        {Object.keys(processedFile).map((key, index) => (
+          <Button
+            key={index}
+            onClick={() => downloadFile(processedFile[key])}
+            variant="contained"
+            sx={{ mt: 2, mr: 2 }}
+          >
+            Download {key.replace('_', ' ')}
+          </Button>
+        ))}
+        <Box sx={{ mt: 2 }}>
+          <Button variant="contained" color="primary" onClick={handleReset}>
+            New Pipeline
+          </Button>
+        </Box>
+      </div>
+    )}
           
         </Box>
       </Container>
