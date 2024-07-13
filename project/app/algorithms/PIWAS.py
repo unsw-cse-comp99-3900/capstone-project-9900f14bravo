@@ -2,7 +2,7 @@ import pandas as pd
 from collections import defaultdict
 import numpy as np
 import os
-
+import re
 # Read 5-mer and 6-mer enrichment data
 def read_kmer_data(file_path):
     kmer_data = pd.read_csv(file_path, header=None, names=['kmer_sequence', 'enrichment_value'])
@@ -19,8 +19,10 @@ def read_protein_sequence(file_path):
 # Extract sample ID from the file name
 def extract_sample_id(file_path):
     file_name = os.path.basename(file_path)
-    sample_id = file_name.split('_')[0]  # Adjust based on actual file name format
-    return sample_id
+    match = re.search(r'AD\d+', file_name)  
+    if match:
+        return match.group(0)  
+    return None
 
 # Calculate enrichment values from kmer data
 def calculate_enrichment(kmer_data):
@@ -110,6 +112,13 @@ def run_piwas(case_file_paths, control_file_paths, protein_file_path, result_dir
     output_df_case = pd.DataFrame(output_data_case)
     output_df_control = pd.DataFrame(output_data_control)
 
+    case_file_name = f'{sample_id_case}_piwas_scores_case.csv'
+    control_file_name = f'{sample_id_control}_piwas_scores_control.csv'
+
     # Write PIWAS scores to CSV files
-    output_df_case.to_csv(os.path.join(result_dir, 'piwas_scores_case.csv'), index=False)
-    output_df_control.to_csv(os.path.join(result_dir, 'piwas_scores_control.csv'), index=False)
+    case_file_path = os.path.join(result_dir, case_file_name)
+    control_file_path = os.path.join(result_dir, control_file_name)
+    output_df_case.to_csv(case_file_path, index=False)
+    output_df_control.to_csv(control_file_path, index=False)
+
+    return case_file_name, control_file_name
