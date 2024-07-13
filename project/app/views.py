@@ -15,6 +15,8 @@ from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from .algorithms.PIWAS import run_piwas
 from .algorithms.PIE import run_pie
+from django.http import FileResponse
+import mimetypes
 # 设置日志
 logger = logging.getLogger(__name__)
 
@@ -238,11 +240,13 @@ def run_piwas_algorithm(request):
         result_dir = os.path.join(settings.MEDIA_ROOT, 'PIWAS-result')
         os.makedirs(result_dir, exist_ok=True)
 
-        run_piwas(case_file_paths, control_file_paths, protein_file_path, result_dir)
+        case_file_name, control_file_name = run_piwas(case_file_paths, control_file_paths, protein_file_path, result_dir)
         result_file_paths = {
-            'piwas_case_result': os.path.join(result_dir, 'piwas_scores_case.csv'),
-            'piwas_control_result': os.path.join(result_dir, 'piwas_scores_control.csv')
+            'piwas_case_result': os.path.join(result_dir, case_file_name),
+            'piwas_control_result': os.path.join(result_dir, control_file_name)
         }
+
+        logger.info(f"PIWAS result file paths: {result_file_paths}")
 
         return Response({'status': 'success', 'file_paths': result_file_paths}, status=status.HTTP_200_OK)
     except Exception as e:
@@ -291,17 +295,17 @@ def run_piwas_pie_algorithm(request):
         os.makedirs(piwas_result_dir, exist_ok=True)
         os.makedirs(pie_result_dir, exist_ok=True)
 
-        run_piwas(case_file_paths, control_file_paths, protein_file_path, piwas_result_dir)
+        case_file_name, control_file_name = run_piwas(case_file_paths, control_file_paths, protein_file_path, piwas_result_dir)
         run_pie(
-            case_file_path=os.path.join(piwas_result_dir, 'piwas_scores_case.csv'),
-            control_file_path=os.path.join(piwas_result_dir, 'piwas_scores_control.csv'),
+            case_file_path=os.path.join(piwas_result_dir, case_file_name),
+            control_file_path=os.path.join(piwas_result_dir, control_file_name),
             protein_file_path=protein_file_path,
             result_dir=pie_result_dir
         )
 
         result_file_paths = {
-            'piwas_case_result': os.path.join(piwas_result_dir, 'piwas_scores_case.csv'),
-            'piwas_control_result': os.path.join(piwas_result_dir, 'piwas_scores_control.csv'),
+            'piwas_case_result': os.path.join(piwas_result_dir, case_file_name),
+            'piwas_control_result': os.path.join(piwas_result_dir, control_file_name),
             'pie_5mer_result': os.path.join(pie_result_dir, 'significant_regions_5mer.csv'),
             'pie_6mer_result': os.path.join(pie_result_dir, 'significant_regions_6mer.csv')
         }
@@ -309,4 +313,23 @@ def run_piwas_pie_algorithm(request):
         return Response({'status': 'success', 'file_paths': result_file_paths}, status=status.HTTP_200_OK)
     except Exception as e:
         logger.error(f"Error running PIWAS+PIE algorithm: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+@api_view(['GET'])
+def download_result_file(request):
+    file_path = request.query_params.get('file_path')
+    if not file_path:
+        return Response({'error': 'file_path parameter is missing'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        if not os.path.exists(file_path):
+            return Response({'error': 'File not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        file_name = os.path.basename(file_path)
+        mime_type, _ = mimetypes.guess_type(file_path)
+        response = FileResponse(open(file_path, 'rb'), content_type=mime_type)
+        response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+        return response
+    except Exception as e:
+        logger.error(f"Error fetching file: {e}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
