@@ -74,24 +74,7 @@ function LoginForm() {
         navigate('/pipeline');
       })
       .catch((error) => {
-        // 处理错误响应
-        if (error.response) {
-          const errorData = error.response.data;
-          const newErrors = {};
-          if (errorData.username) {
-            newErrors.username = errorData.username;
-          }
-          if (errorData.password) {
-            newErrors.password = errorData.password;
-          }
-          if (errorData.detail) {
-            newErrors.general = errorData.detail;
-          }
-          setErrors(newErrors);
-        } else {
-          // 处理网络错误或其他错误
-          setErrors({ general: 'An unexpected error occurred. Please try again.' });
-        }
+       handleFieldErrors(error)
       });
   };
 
