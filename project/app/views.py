@@ -15,6 +15,7 @@ from rest_framework.decorators import permission_classes
 from rest_framework.permissions import AllowAny
 from .algorithms.PIWAS import run_piwas
 from .algorithms.PIE import run_pie
+from .algorithms.PIWAS_plot import process_piwas_scores
 from django.http import FileResponse
 import mimetypes
 # 设置日志
@@ -241,9 +242,18 @@ def run_piwas_algorithm(request):
         os.makedirs(result_dir, exist_ok=True)
 
         case_file_name, control_file_name = run_piwas(case_file_paths, control_file_paths, protein_file_path, result_dir)
+        
+        plot_file_path = process_piwas_scores(
+            os.path.join(result_dir, case_file_name),
+            os.path.join(result_dir, control_file_name),
+            result_dir
+        )
+    
+
         result_file_paths = {
             'piwas_case_result': os.path.join(result_dir, case_file_name),
-            'piwas_control_result': os.path.join(result_dir, control_file_name)
+            'piwas_control_result': os.path.join(result_dir, control_file_name),
+            'plot_file': plot_file_path
         }
 
         logger.info(f"PIWAS result file paths: {result_file_paths}")
@@ -269,8 +279,8 @@ def run_pie_algorithm(request):
 
         run_pie(piwas_case_file_path, piwas_control_file_path, protein_file_path, result_dir)
         result_file_paths = {
-            'pie_5mer_result': os.path.join(result_dir, 'significant_regions_5mer.csv'),
-            'pie_6mer_result': os.path.join(result_dir, 'significant_regions_6mer.csv')
+            'total_results': os.path.join(result_dir, 'total_results_output.csv'),
+            'top_5_percent': os.path.join(result_dir, 'top_5_percent_output.csv')
         }
 
         return Response({'status': 'success', 'file_paths': result_file_paths}, status=status.HTTP_200_OK)
@@ -297,17 +307,24 @@ def run_piwas_pie_algorithm(request):
 
         case_file_name, control_file_name = run_piwas(case_file_paths, control_file_paths, protein_file_path, piwas_result_dir)
         run_pie(
-            case_file_path=os.path.join(piwas_result_dir, case_file_name),
-            control_file_path=os.path.join(piwas_result_dir, control_file_name),
+            piwas_case_file_path=os.path.join(piwas_result_dir, case_file_name),
+            piwas_control_file_path=os.path.join(piwas_result_dir, control_file_name),
             protein_file_path=protein_file_path,
             result_dir=pie_result_dir
+        )
+
+        plot_file_path = process_piwas_scores(
+            file_path1=os.path.join(piwas_result_dir, case_file_name),
+            file_path2=os.path.join(piwas_result_dir, control_file_name),
+            result_dir=piwas_result_dir
         )
 
         result_file_paths = {
             'piwas_case_result': os.path.join(piwas_result_dir, case_file_name),
             'piwas_control_result': os.path.join(piwas_result_dir, control_file_name),
             'pie_5mer_result': os.path.join(pie_result_dir, 'significant_regions_5mer.csv'),
-            'pie_6mer_result': os.path.join(pie_result_dir, 'significant_regions_6mer.csv')
+            'pie_6mer_result': os.path.join(pie_result_dir, 'significant_regions_6mer.csv'),
+            'plot_file': plot_file_path
         }
 
         return Response({'status': 'success', 'file_paths': result_file_paths}, status=status.HTTP_200_OK)
