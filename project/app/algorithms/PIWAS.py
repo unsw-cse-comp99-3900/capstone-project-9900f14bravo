@@ -98,7 +98,9 @@ def run_piwas(case_file_paths, control_file_paths, protein_file_path, result_dir
         'ProteinName': ['>sp|P0DTC9|NCAP_SARS2 Nucleocapsid phosphoprotein OS=Severe acute respiratory syndrome coronavirus 2 OX=2697049 GN=N PE=1 SV=1'] * len(piwas_scores_case),
         'SampleID': [sample_id_case] * len(piwas_scores_case),
         'IwasValue': piwas_scores_case,
-        'AminoAcidPosition': list(range(1, len(piwas_scores_case) + 1))
+        'AminoAcidPosition': list(range(1, len(piwas_scores_case) + 1)),
+        'kmer_sequence_5mer': kmer_list_5mer_case[:len(piwas_scores_case)],
+        'kmer_sequence_6mer': kmer_list_6mer_case[:len(piwas_scores_case)]
     }
 
     # Construct output data in the required format for control
@@ -106,8 +108,11 @@ def run_piwas(case_file_paths, control_file_paths, protein_file_path, result_dir
         'ProteinName': ['>sp|P0DTC9|NCAP_SARS2 Nucleocapsid phosphoprotein OS=Severe acute respiratory syndrome coronavirus 2 OX=2697049 GN=N PE=1 SV=1'] * len(piwas_scores_control),
         'SampleID': [sample_id_control] * len(piwas_scores_control),
         'IwasValue': piwas_scores_control,
-        'AminoAcidPosition': list(range(1, len(piwas_scores_control) + 1))
+        'AminoAcidPosition': list(range(1, len(piwas_scores_control) + 1)),
+        'kmer_sequence_5mer': kmer_list_5mer_control[:len(piwas_scores_control)],
+        'kmer_sequence_6mer': kmer_list_6mer_control[:len(piwas_scores_control)]
     }
+
 
     output_df_case = pd.DataFrame(output_data_case)
     output_df_control = pd.DataFrame(output_data_control)
