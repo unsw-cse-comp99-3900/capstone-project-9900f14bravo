@@ -1,17 +1,17 @@
+
+import os
 import numpy as np
 import pandas as pd
-from Bio import SeqIO
-import os
+from scipy.stats import norm
+
+# 自定义IQR函数
 def interquartile_range(arr, axis=None):
     Q75 = np.percentile(arr, 75, axis=axis)
     Q25 = np.percentile(arr, 25, axis=axis)
     IQR = Q75 - Q25
     return Q75, Q25, IQR
 
-def read_protein_sequence(file_path):
-    protein_sequence = str(SeqIO.read(file_path, "fasta").seq)
-    return protein_sequence
-
+# 步骤1：归一化PIWAS分数
 def normalize_piwas_scores(cases, controls):
     med_i = np.median(controls)
     mad_i_u = np.median(np.abs(controls - med_i))
@@ -20,109 +20,87 @@ def normalize_piwas_scores(cases, controls):
     normalized_cases = (cases - med_i) / mad_i_u
     return normalized_cases, med_i, mad_i_u
 
+# 步骤2：计算离群值阈值
 def calculate_outlier_threshold(Q75, Q25):
     IQR = Q75 - Q25
     outlier_threshold_upper = Q75 + 1.5 * IQR
     return outlier_threshold_upper
 
+# 步骤3：计算离群值统计量
 def calculate_outlier_sum(normalized_cases, outlier_threshold):
     outlier_sum = np.sum((normalized_cases > outlier_threshold) * (normalized_cases - outlier_threshold))
     return outlier_sum
 
-def calculate_z_score(outlier_sum, controls, outlier_threshold):
+# 步骤4：计算显著性
+def calculate_z_score(outlier_sum, case_values, control_values, threshold, n_iterations=1000):
     null_distribution = []
-    for _ in range(1000):
-        permuted_controls = np.random.permutation(controls)
-        permuted_outlier_sum = np.sum((permuted_controls > outlier_threshold) * (permuted_controls - outlier_threshold))
+    combined_values = np.concatenate((case_values, control_values))
+    n_case = len(case_values)
+    
+    for _ in range(n_iterations):
+        permuted_values = np.random.permutation(combined_values)
+        permuted_case_values = permuted_values[:n_case]
+        normalized_permuted_case_values, _, _ = normalize_piwas_scores(permuted_case_values, control_values)
+        permuted_outlier_sum = calculate_outlier_sum(normalized_permuted_case_values, threshold)
         null_distribution.append(permuted_outlier_sum)
-    mean = np.mean(null_distribution)
-    std = np.std(null_distribution)
-    z_score = (outlier_sum - mean) / std if std != 0 else 0
+    
+    mean_null = np.mean(null_distribution)
+    std_null = np.std(null_distribution)
+    z_score = (outlier_sum - mean_null) / std_null if std_null != 0 else np.nan
+    z_score = 0 if np.isnan(z_score) or z_score == 0 else z_score
     return z_score
 
-def run_pie(case_file_path, control_file_path, protein_file_path, result_dir):
-    # 从FASTA文件读取基础蛋白质序列
-    protein_sequence = read_protein_sequence(protein_file_path)
+# 步骤5：计算P值
+def calculate_p_value(z_score):
+    p_value = 2 * (1 - norm.cdf(abs(z_score)))
+    return p_value
 
-    # 读取病例组和对照组数据
-    case_data = pd.read_csv(case_file_path)
-    control_data = pd.read_csv(control_file_path)
+def run_pie(piwas_case_file_path, piwas_control_file_path, protein_file_path, result_dir):
+    # Load the case and control data
+    case_data = pd.read_csv(piwas_case_file_path)
+    control_data = pd.read_csv(piwas_control_file_path)
 
-    # 提取5-mer和6-mer的piwass_score
-    piwass_5mer_case = case_data[['kmer_sequence_5mer', 'piwass_score']]
-    piwass_6mer_case = case_data[['kmer_sequence_6mer', 'piwass_score']]
-    piwass_5mer_control = control_data[['kmer_sequence_5mer', 'piwass_score']]
-    piwass_6mer_control = control_data[['kmer_sequence_6mer', 'piwass_score']]
+    # Prepare data structures
+    positions = case_data['AminoAcidPosition'].unique()
+    results = []
 
-    cases_5 = piwass_5mer_case['piwass_score'].values
-    cases_6 = piwass_6mer_case['piwass_score'].values
-    controls_5 = piwass_5mer_control['piwass_score'].values
-    controls_6 = piwass_6mer_control['piwass_score'].values
+    # Iterate over each position
+    for pos in positions:
+        case_values = case_data[case_data['AminoAcidPosition'] == pos]['IwasValue'].values
+        control_values = control_data[control_data['AminoAcidPosition'] == pos]['IwasValue'].values
 
-    control_z_scores = []
+        if len(control_values) == 0 or len(case_values) == 0:
+            results.append((pos, 0, 0, 1))  # p_value为1表示不显著
+            continue
 
-    # 处理长度为5的窗口
-    for start_idx in range(len(protein_sequence) - 5 + 1):
-        window_controls = controls_5[start_idx:start_idx + 5]
-        
-        if len(window_controls) == 5:
-            normalized_window_controls, med_i, mad_i_u = normalize_piwas_scores(window_controls, window_controls)
-            Q75, Q25, IQR = interquartile_range(window_controls)
-            outlier_threshold_upper = calculate_outlier_threshold(Q75, Q25)
-            outlier_sum = calculate_outlier_sum(normalized_window_controls, outlier_threshold_upper)
-            z_score = calculate_z_score(outlier_sum, window_controls, outlier_threshold_upper)
-            control_z_scores.append(z_score)
+        # Step 1: Normalize PIWAS scores
+        normalized_case_values, med_i, mad_i_u = normalize_piwas_scores(case_values, control_values)
 
-    # 处理长度为6的窗口
-    for start_idx in range(len(protein_sequence) - 6 + 1):
-        window_controls = controls_6[start_idx:start_idx + 6]
-        
-        if len(window_controls) == 6:
-            normalized_window_controls, med_i, mad_i_u = normalize_piwas_scores(window_controls, window_controls)
-            Q75, Q25, IQR = interquartile_range(window_controls)
-            outlier_threshold_upper = calculate_outlier_threshold(Q75, Q25)
-            outlier_sum = calculate_outlier_sum(normalized_window_controls, outlier_threshold_upper)
-            z_score = calculate_z_score(outlier_sum, window_controls, outlier_threshold_upper)
-            control_z_scores.append(z_score)
+        # Step 2: Calculate outlier threshold
+        Q75, Q25, IQR = interquartile_range(control_values)
+        outlier_threshold = calculate_outlier_threshold(Q75, Q25)
 
-    if len(control_z_scores) > 0:
-        z_score_threshold = np.percentile(control_z_scores, 95)
-    else:
-        z_score_threshold = float('nan')
+        # Step 3: Calculate outlier sum
+        outlier_sum = calculate_outlier_sum(normalized_case_values, outlier_threshold)
 
-    significant_regions_5 = []
-    significant_regions_6 = []
+        # Step 4: Calculate Z-score
+        z_score = calculate_z_score(outlier_sum, case_values, control_values, outlier_threshold)
 
-    for start_idx in range(len(protein_sequence) - 5 + 1):
-        window_cases = cases_5[start_idx:start_idx + 5]
-        window_controls = controls_5[start_idx:start_idx + 5]
-        
-        if len(window_controls) == 5:
-            normalized_window_cases, med_i, mad_i_u = normalize_piwas_scores(window_cases, window_controls)
-            Q75, Q25, IQR = interquartile_range(window_controls)
-            outlier_threshold_upper = calculate_outlier_threshold(Q75, Q25)
-            outlier_sum = calculate_outlier_sum(normalized_window_cases, outlier_threshold_upper)
-            z_score = calculate_z_score(outlier_sum, window_controls, outlier_threshold_upper)
-            
-            if z_score > z_score_threshold:
-                significant_regions_5.append((start_idx, 5, protein_sequence[start_idx:start_idx + 5]))
+        # Step 5: Calculate P-value
+        p_value = calculate_p_value(z_score)
 
-    for start_idx in range(len(protein_sequence) - 6 + 1):
-        window_cases = cases_6[start_idx:start_idx + 6]
-        window_controls = controls_6[start_idx:start_idx + 6]
-        
-        if len(window_controls) == 6:
-            normalized_window_cases, med_i, mad_i_u = normalize_piwas_scores(window_cases, window_controls)
-            Q75, Q25, IQR = interquartile_range(window_controls)
-            outlier_threshold_upper = calculate_outlier_threshold(Q75, Q25)
-            outlier_sum = calculate_outlier_sum(normalized_window_cases, outlier_threshold_upper)
-            z_score = calculate_z_score(outlier_sum, window_controls, outlier_threshold_upper)
-            
-            if z_score > z_score_threshold:
-                significant_regions_6.append((start_idx, 6, protein_sequence[start_idx:start_idx + 6]))
+        results.append((pos, case_values[0], z_score, p_value))
 
-    df_5mer = pd.DataFrame(significant_regions_5, columns=['Position', 'Length', 'Fragment'])
-    df_6mer = pd.DataFrame(significant_regions_6, columns=['Position', 'Length', 'Fragment'])
+    # Convert results to DataFrame for better visualization
+    results_df = pd.DataFrame(results, columns=['AminoAcidPosition', 'IwasValue', 'ZScore', 'PValue'])
 
-    df_5mer.to_csv(os.path.join(result_dir, 'significant_regions_5mer.csv'), index=False)
-    df_6mer.to_csv(os.path.join(result_dir, 'significant_regions_6mer.csv'), index=False)
+    # 找出p_value在前5%的氨基酸序列
+    top_5_percent = results_df[results_df['PValue'] <= results_df['PValue'].quantile(0.05)]
+
+    # Save the resulting DataFrame to a CSV file
+    results_output_file_path = os.path.join(result_dir, 'total_results_output.csv')
+    top_5_percent_output_file_path = os.path.join(result_dir, 'top_5_percent_output.csv')
+    results_df.to_csv(results_output_file_path, index=False)
+    top_5_percent.to_csv(top_5_percent_output_file_path, index=False)
+
+    return results_output_file_path, top_5_percent_output_file_path
