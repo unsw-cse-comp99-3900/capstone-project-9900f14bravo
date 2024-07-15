@@ -4,7 +4,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import NavBar from './NavBar';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
-
+import ProcessedResult from './ProcessedResult';
 const defaultFiles = {
   caseSample: ['default_case_sample_1', 'default_case_sample_2'],
   controlSample: ['default_control_sample_1', 'default_control_sample_2'],
@@ -361,7 +361,7 @@ const Pipeline = () => {
                   {algorithm === 'PIE' && (
                     <>
                       <Box sx={{ mt: 2 }}>
-                        <Typography>PIWAS Case Result</Typography>
+                        <Typography>PIWAS Results</Typography>
                         <Grid container spacing={2} alignItems="center">
                           <Grid item xs={12}>
                             <RadioGroup
@@ -509,24 +509,12 @@ const Pipeline = () => {
           {running && <Typography>Running...</Typography>}
   
           {processedFile && (
-      <div>
-        <Typography>Process completed. Download the result below:</Typography>
-        {Object.keys(processedFile).map((key, index) => (
-          <Button
-            key={index}
-            onClick={() => downloadFile(processedFile[key])}
-            variant="contained"
-            sx={{ mt: 2, mr: 2 }}
-          >
-            Download {key.replace('_', ' ')}
-          </Button>
-        ))}
-        <Box sx={{ mt: 2 }}>
-          <Button variant="contained" color="primary" onClick={handleReset}>
-            New Pipeline
-          </Button>
-        </Box>
-      </div>
+      <ProcessedResult
+        processedFile={processedFile}
+        downloadFile={downloadFile}
+        handleReset={handleReset}
+        algorithm={algorithm}  
+      />
     )}
           
         </Box>
