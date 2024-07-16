@@ -14,23 +14,28 @@ const ProcessedResult = ({ processedFile, downloadFile, handleReset, algorithm }
           />
         </Box>
       );
-    } else if (algorithm === 'PIWAS+PIE' && processedFile.plot_file) {
+    } else if (algorithm === 'PIWAS+PIE' && processedFile.plot_file1 && processedFile.plot_file2) {
       return (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="h6">PIWAS+PIE Plot:</Typography>
-          <img
-            src={`http://localhost:8000${processedFile.plot_file}`}
-            alt="PIWAS+PIE Plot"
-            style={{ width: '100%', maxHeight: '500px', objectFit: 'contain' }}
-          />
-        </Box>
+    <Typography variant="h6">PIWAS&PIE Plot:</Typography>
+    <img
+      src={`http://localhost:8000/media/PIWAS&PIE-result/piwas_plot.png`}
+      alt="PIWAS Plot"
+      style={{ width: '100%', maxHeight: '500px', objectFit: 'contain' }}
+    />
+    <img
+      src={`http://localhost:8000/media/PIWAS&PIE-result/pie_plot.png`}
+      alt="PIE Plot"
+      style={{ width: '100%', maxHeight: '500px', objectFit: 'contain' }}
+    />
+  </Box>
       );
-    } else if (algorithm === 'PIE' && processedFile.pie_plot) {
+    } else if (algorithm === 'PIE' && processedFile.plot_file) {
       return (
         <Box sx={{ mt: 2 }}>
           <Typography variant="h6">PIE Plot:</Typography>
           <img
-            src={`http://localhost:8000${processedFile.plot_file}`}
+            src={`http://localhost:8000/media/PIE-result/pie_plot.png`}
             alt="PIE Plot"
             style={{ width: '100%', maxHeight: '500px', objectFit: 'contain' }}
           />
