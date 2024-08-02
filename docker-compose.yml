@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend  
+    container_name: backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app  
+      - ./backend/db.sqlite3:/app/db.sqlite3
+      - ./backend/media:/app/media
+    environment:
+      - DJANGO_SETTINGS_MODULE=project.settings  
+
+  frontend:
+    build:
+      context: ./frontend 
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+
+
+
+
+

@@ -1,0 +1,20 @@
+{
+  "files": {
+    "main.css": "/static/css/main.e6c13ad2.css",
+    "main.js": "/static/js/main.e5943a06.js",
+    "static/js/453.68693753.chunk.js": "/static/js/453.68693753.chunk.js",
+    "static/media/PIE.png": "/static/media/PIE.baa1ebc2e453e58f95bc.png",
+    "static/media/long-covid.png": "/static/media/long-covid.b8c9ceebbc3a0eed27e5.png",
+    "static/media/SERA-Platform.png": "/static/media/SERA-Platform.c480c5f0c4293c910d97.png",
+    "static/media/background.jpg": "/static/media/background.c3822e1109a5477d81c2.jpg",
+    "static/media/PIWAS.png": "/static/media/PIWAS.319d20895f68954d93dc.png",
+    "index.html": "/index.html",
+    "main.e6c13ad2.css.map": "/static/css/main.e6c13ad2.css.map",
+    "main.e5943a06.js.map": "/static/js/main.e5943a06.js.map",
+    "453.68693753.chunk.js.map": "/static/js/453.68693753.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.e6c13ad2.css",
+    "static/js/main.e5943a06.js"
+  ]
+}
