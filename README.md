@@ -43,7 +43,7 @@ It also produces visualization results and processed data for further study.
    ```
 2. **Download the default files(library)**
 
-   you need to click https://unsw-my.sharepoint.com/:u:/r/personal/z5200977_ad_unsw_edu_au/Documents/data.zip?csf=1&web=1&e=5ArEkN and then dowload the "data".<br>
+   you need to click [https://unsw-my.sharepoint.com/:u:/r/personal/z5200977_ad_unsw_edu_au/Documents/data.zip?csf=1&web=1&e=5ArEkN](https://unsw-my.sharepoint.com/:u:/g/personal/z5200977_ad_unsw_edu_au/EStVJGrz4nJOhc78HiPBe44BOiGrnikBUNQwwH_lRwxgfg?e=VXTNKc) and then dowload the "data".<br>
    Unzip the "data" file and put it under the project's backend/media, note that the entire default folder is named "data", don't change it.
 
 3. **Build and run the application using Docker Compose:**
